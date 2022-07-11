@@ -94,10 +94,5 @@ class StripePriceEvent(StripeBaseEvent):
 class StripeEvent(BaseModel):
     # Add event classes to this attribute as they are implemented, more specific types first.
     # see https://pydantic-docs.helpmanual.io/usage/types/#discriminated-unions-aka-tagged-unions
-    event: Union[
-        StripeSubscriptionEvent,
-        StripeInvoiceEvent,
-        StripeProductEvent,
-        StripePriceEvent,
-        StripeBaseEvent,  # needed here so unimplemented event types can pass through validation
-    ] = Field(discriminator='type')
+    event: Any
+
