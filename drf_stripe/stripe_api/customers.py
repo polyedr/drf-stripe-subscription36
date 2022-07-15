@@ -1,10 +1,14 @@
 from typing import overload
+import shortuuid
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.transaction import atomic
 
 from drf_stripe.models import StripeUser
+from apps.accounts.models import User
+from django.contrib.auth.models import Group
+from django.core.mail import send_mail
 from drf_stripe.stripe_api.api import stripe_api as stripe
 from drf_stripe.stripe_models.customer import StripeCustomers, StripeCustomer
 from ..settings import drf_stripe_settings
@@ -160,6 +164,12 @@ def stripe_api_update_customers(limit=100, starting_after=None, test_data=None):
             query_filters = {drf_stripe_settings.DJANGO_USER_EMAIL_FIELD: customer.email}
             defaults = {k: getattr(customer, v) for k, v in
                         drf_stripe_settings.USER_CREATE_DEFAULTS_ATTRIBUTE_MAP.items()}
+            # Assign a username
+            username = customer.email.split("@")[0]
+            shortuuid_token = str(shortuuid.uuid()[:5])
+            username = username + shortuuid_token
+            defaults.update({"username":username})
+
             user, user_created = get_user_model().objects.get_or_create(
                 **query_filters,
                 defaults=defaults
@@ -170,6 +180,21 @@ def stripe_api_update_customers(limit=100, starting_after=None, test_data=None):
 
             if user_created is True:
                 user_creation_count += 1
+                # Adding a new user to the CommonUsers group
+                group = Group.objects.get(
+                    name='CommonUsers')  # This group should be existed with all the rights are necessary
+                user.groups.add(group)
+
+                # Assign a password to a new user
+                user_pass = User.objects.make_random_password()
+                user.set_password(user_pass)
+                user.save(update_fields=['password'])
+
+                # Send an email to new user
+                send_mail("Your account is ready", "Your account is ready, and the subscription is activated. "
+                    "Email: " + customer.email + ", Username: " + username + ", Password: " + user_pass + ", Server: www.adevi.info" ,
+                    "Adevi Admin <info@adevi.info>", [customer.email])
+
             if stripe_user_created is True:
                 stripe_user_creation_count += 1
 
